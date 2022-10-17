@@ -1,0 +1,110 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .docker/app/dev/Dockerfile
+    restart: always
+    env_file:
+      - src/.env.dev
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      PHP_IDE_CONFIG: "serverName=DockerRNCB"
+    volumes:
+      - ./src/:/var/www/html/:delegated
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.2
+  db:
+    image: postgres:latest
+    restart: always
+    volumes:
+      - ./storage/db:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      timeout: 3s
+      interval: 1s
+      retries: 30
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'password'
+      POSTGRES_DB: 'rncb_dev'
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.3
+  webserver:
+    build:
+      context: .
+      dockerfile: .docker/webserver/Dockerfile
+    restart: always
+    depends_on:
+      - app
+    ports:
+      - "8182:80"
+    volumes:
+      - ./src/:/var/www/html/
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.4
+  redis:
+    image: "redis:alpine"
+    command: redis-server --requirepass password
+    restart: always
+    healthcheck:
+      test: [ "CMD", "redis-cli","ping" ]
+      timeout: 3s
+      interval: 1s
+      retries: 30
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.5
+  minio:
+    image: minio/minio
+    command: server --console-address ":9001" /data/
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minio_user
+      MINIO_ROOT_PASSWORD: minio_password
+    volumes:
+      - ./storage/minio/data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.7
+  mailhog:
+    image: mailhog/mailhog
+    restart: always
+#    ports:
+#      - "8025:8025"
+#      - "1025:1025"
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.8
+  minio_create_bucket:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set localminio http://10.18.2.7:9000 minio_user minio_password;
+      /usr/bin/mc mb localminio/storage;
+      /usr/bin/mc policy set public localminio/storage;
+      exit 0;
+      "
+    networks:
+      container_network:
+        ipv4_address: 10.18.2.11
+
+networks:
+  container_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.18.2.0/24
