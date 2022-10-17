@@ -55,8 +55,8 @@ return [
             'driver' => 'custom',
             'via' => \App\Logging\Telegram\TelegramLoggerFactory::class,
             'level' => env('LOG_LEVEL', 'debug'),
-            'chat_id' => (int) env('TELEGRAM_LOG_CHAT_ID', 'debug'),
-            'token' => env('TELEGRAM_LOG_TOKEN', 'debug'),
+            'chat_id' => (int) env('TELEGRAM_LOG_CHAT_ID', ''),
+            'token' => env('TELEGRAM_LOG_TOKEN', ''),
          ],
         'stack' => [
             'driver' => 'stack',
